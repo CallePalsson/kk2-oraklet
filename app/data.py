@@ -19,3 +19,7 @@ def save_csv(content: bytes) -> pd.DataFrame:
 
 def get_dataframe() -> pd.DataFrame:
     return _dataframe
+
+
+def get_stats() -> dict:
+    return _dataframe.describe(include="all").fillna("").to_dict()
