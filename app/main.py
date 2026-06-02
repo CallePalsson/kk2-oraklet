@@ -2,8 +2,16 @@ import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from app import data
+from app.chain.pipeline import build_chain
 from app.config import settings
-from app.schemas import DataStatsResponse, HealthResponse, UploadDataResponse
+from app.schemas import (
+    AskRequest,
+    AskResponse,
+    DataStatsResponse,
+    HealthResponse,
+    PromptBuilderInput,
+    UploadDataResponse,
+)
 
 
 app = FastAPI(title="KK2 Oraklet")
@@ -46,3 +54,27 @@ def data_stats() -> DataStatsResponse:
         raise HTTPException(status_code=404, detail="No dataset has been uploaded")
 
     return DataStatsResponse(stats=data.get_stats())
+
+
+@app.post("/ai/ask", response_model=AskResponse)
+def ask_ai(request: AskRequest) -> AskResponse:
+    df = data.get_dataframe()
+    if df.empty:
+        raise HTTPException(status_code=400, detail="Upload a dataset before asking")
+
+    chain = build_chain()
+    try:
+        result = chain.invoke(
+            PromptBuilderInput(
+                question=request.question,
+                stats=data.get_stats(),
+            )
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return AskResponse(
+        question=result.question,
+        answer=result.answer,
+        model=result.model,
+    )
