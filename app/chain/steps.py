@@ -3,7 +3,12 @@ from typing import Any
 
 from app.config import settings
 from app.chain.runnable import Runnable
-from app.schemas import LLMRunnerOutput, PromptBuilderInput, PromptBuilderOutput
+from app.schemas import (
+    LLMRunnerOutput,
+    PromptBuilderInput,
+    PromptBuilderOutput,
+    ResponseParserOutput,
+)
 
 
 _text_generator: Any | None = None
@@ -55,4 +60,20 @@ class LLMRunner(Runnable[PromptBuilderOutput, LLMRunnerOutput]):
             question=value.question,
             raw_text=raw_text,
             model=settings.model_name,
+        )
+
+
+class ResponseParser(Runnable[LLMRunnerOutput, ResponseParserOutput]):
+    def invoke(self, value: LLMRunnerOutput) -> ResponseParserOutput:
+        answer = value.raw_text.strip()
+        if "Svar:" in answer:
+            answer = answer.split("Svar:", maxsplit=1)[-1].strip()
+
+        if not answer:
+            answer = "Jag kunde inte hitta ett tydligt svar i modellens output."
+
+        return ResponseParserOutput(
+            question=value.question,
+            answer=answer,
+            model=value.model,
         )
