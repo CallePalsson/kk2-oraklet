@@ -21,5 +21,10 @@ def get_dataframe() -> pd.DataFrame:
     return _dataframe
 
 
+def clear_data() -> None:
+    global _dataframe
+    _dataframe = pd.DataFrame()
+
+
 def get_stats() -> dict:
     return _dataframe.describe(include="all").fillna("").to_dict()
