@@ -1,5 +1,7 @@
+import pytest
+
 from app.chain.runnable import Runnable
-from app.chain.steps import PromptBuilder, ResponseParser
+from app.chain.steps import LLMRunner, PromptBuilder, ResponseParser
 from app.schemas import (
     LLMRunnerOutput,
     PromptBuilderInput,
@@ -58,3 +60,21 @@ def test_chain_runs_steps_with_pipe_operator() -> None:
 
     assert result.answer == "Bryggan har högst vattentemperatur."
     assert result.model == "fake-model"
+
+
+def test_llm_runner_handles_model_error(monkeypatch) -> None:
+    def broken_generator():
+        raise OSError("Model could not be loaded")
+
+    monkeypatch.setattr(
+        "app.chain.steps.get_text_generator",
+        broken_generator,
+    )
+
+    with pytest.raises(RuntimeError, match="Could not generate"):
+        LLMRunner().invoke(
+            PromptBuilderOutput(
+                question="Vilken badplats har varmast vatten?",
+                prompt="Test prompt",
+            )
+        )

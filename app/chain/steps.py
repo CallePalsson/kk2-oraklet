@@ -43,19 +43,18 @@ class PromptBuilder(Runnable[PromptBuilderInput, PromptBuilderOutput]):
 
 class LLMRunner(Runnable[PromptBuilderOutput, LLMRunnerOutput]):
     def invoke(self, value: PromptBuilderOutput) -> LLMRunnerOutput:
-        generator = get_text_generator()
-
         try:
+            generator = get_text_generator()
             result = generator(
                 value.prompt,
                 max_new_tokens=120,
                 do_sample=False,
                 return_full_text=False,
             )
+            raw_text = result[0]["generated_text"]
         except Exception as exc:
             raise RuntimeError("Could not generate an answer with SmolLLM") from exc
 
-        raw_text = result[0]["generated_text"]
         return LLMRunnerOutput(
             question=value.question,
             raw_text=raw_text,
