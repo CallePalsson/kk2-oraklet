@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from app import data
 from app.main import app
+from app.schemas import ResponseParserOutput
 
 
 client = TestClient(app)
@@ -58,3 +59,39 @@ def test_stats_after_upload_returns_describe_data() -> None:
 
     assert response.status_code == 200
     assert "water_temp_c" in response.json()["stats"]
+
+
+def test_ask_without_dataset_returns_400() -> None:
+    response = client.post(
+        "/ai/ask",
+        json={"question": "Vilken badplats har varmast vatten?"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_ask_returns_answer_from_chain(monkeypatch) -> None:
+    class FakeChain:
+        def invoke(self, value) -> ResponseParserOutput:
+            return ResponseParserOutput(
+                question=value.question,
+                answer="Bryggan har varmast vatten.",
+                model="fake-model",
+            )
+
+    data.save_csv(
+        b"place,water_temp_c\nBryggan,21.4\nStranden,19.8\n"
+    )
+    monkeypatch.setattr("app.main.build_chain", lambda: FakeChain())
+
+    response = client.post(
+        "/ai/ask",
+        json={"question": "Vilken badplats har varmast vatten?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "question": "Vilken badplats har varmast vatten?",
+        "answer": "Bryggan har varmast vatten.",
+        "model": "fake-model",
+    }
