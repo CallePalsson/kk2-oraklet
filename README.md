@@ -1,22 +1,40 @@
 # KK2 Oraklet
 
-Detta projekt är byggt som en del av KK2 och har som syfte att kombinera
-dataanalys med en mindre språkmodell.
+Syftet med detta projekt var att bygga ett REST API som kombinerar
+dataanalys med en mindre språkmodell. Användaren kan ladda upp en CSV fil,
+se statistik om datasetet och sedan ställa frågor om datan.
 
-Applikationen är ett REST API byggt med FastAPI där användaren kan ladda upp
-en CSV fil, hämta statistik från datan och ställa frågor om datasetet.
-Pandas används för att läsa och analysera filen och SmolLM2 används för att
-generera ett svar.
+Applikationen är byggd med FastAPI och Pandas används för att läsa och
+analysera CSV filen. AI delen använder den lokala modellen SmolLM2 via
+Transformers. Eftersom modellen körs lokalt behövs ingen API nyckel och datan
+skickas inte vidare till en extern AI tjänst.
 
-AI flödet är uppdelat i en egen typad Runnable kedja:
+## Applikationens struktur och flöde
+
+Projektet är uppdelat så att varje del har ett tydligt ansvar. `main.py`
+innehåller alla endpoints, `data.py` hanterar datasetet och `schemas.py`
+innehåller Pydantic modellerna som används för input och output.
+
+AI flödet ligger i `chain/` och är uppdelat i tre steg:
 
 ```python
 PromptBuilder() | LLMRunner() | ResponseParser()
 ```
 
-Varje steg har ett eget ansvar. PromptBuilder bygger prompten från frågan och
-statistiken, LLMRunner skickar prompten till modellen och ResponseParser tar
-hand om modellens svar.
+`PromptBuilder` bygger en prompt från användarens fråga och statistiken från
+Pandas. `LLMRunner` skickar prompten till SmolLM2 och `ResponseParser` tar hand
+om modellens råa svar. Jag valde denna struktur eftersom det blir enklare att
+förstå och testa varje del separat istället för att lägga all logik i en stor
+funktion.
+
+Flödet fungerar ungefär så här:
+
+1. Användaren laddar upp en CSV fil
+2. Pandas läser filen och sparar datasetet i minnet
+3. Statistik skapas med `describe()`
+4. Användaren skickar en fråga till `/ai/ask`
+5. Frågan och statistiken skickas genom Runnable kedjan
+6. Modellen genererar ett svar som returneras som JSON
 
 ## Tekniker
 
@@ -31,54 +49,54 @@ Projektet använder:
 - Pytest
 - uv
 
-## Installation
+## Installation och start
 
-Klona repot och gå in i projektmappen.
-
-Installera sedan projektets dependencies:
+Klona repot och gå in i projektmappen. Installera sedan projektets
+dependencies:
 
 ```bash
 uv sync
 ```
 
-Modellen laddas ner första gången `/ai/ask` används. Standardmodellen är:
+Starta applikationen med:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+Servern körs sedan på:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger dokumentationen finns på:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+SmolLM2 laddas ner första gången `/ai/ask` används. Standardmodellen är:
 
 ```text
 HuggingFaceTB/SmolLM2-135M-Instruct
 ```
 
-Det går att ändra modell och maxstorlek på uppladdade filer med en `.env` fil:
+Det går även att ändra modell eller maxstorleken för uppladdade filer i en
+`.env` fil:
 
 ```env
 MODEL_NAME=HuggingFaceTB/SmolLM2-135M-Instruct
 MAX_UPLOAD_BYTES=1000000
 ```
 
-`.env` är exkluderad från Git genom `.gitignore`.
-
-## Starta applikationen
-
-Starta servern med:
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-Swagger dokumentationen finns sedan på:
-
-```text
-http://127.0.0.1:8000/docs
-```
+`.env` finns med i `.gitignore` och ska inte checkas in i Git.
 
 ## Endpoints
 
-### Health check
+### GET /health
 
-```http
-GET /health
-```
-
-Returnerar:
+Används för att kontrollera att servern är igång.
 
 ```json
 {
@@ -86,23 +104,17 @@ Returnerar:
 }
 ```
 
-### Ladda upp CSV
+### POST /data/upload
 
-```http
-POST /data/upload
-```
-
-Endpointen tar emot en CSV fil som form-data. Datasetet sparas tillfälligt i
-minnet och försvinner när servern startas om.
-
-Exempel:
+Tar emot en CSV fil som form-data. Datasetet sparas tillfälligt i minnet och
+försvinner när servern startas om.
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/data/upload" \
   -F "file=@water.csv"
 ```
 
-Svaret innehåller antal rader, kolumner och datatyper:
+Exempel på svar:
 
 ```json
 {
@@ -115,27 +127,19 @@ Svaret innehåller antal rader, kolumner och datatyper:
 }
 ```
 
-### Hämta statistik
+### GET /data/stats
 
-```http
-GET /data/stats
-```
-
-Returnerar statistik skapad med Pandas `describe()`. Om inget dataset har
-laddats upp returneras ett 404 fel.
+Returnerar statistik från Pandas `describe()`. Ett dataset måste vara
+uppladdat först, annars returneras ett 404 fel.
 
 ```bash
 curl "http://127.0.0.1:8000/data/stats"
 ```
 
-### Ställ en fråga
+### POST /ai/ask
 
-```http
-POST /ai/ask
-```
-
-Endpointen skickar statistik och användarens fråga genom Runnable kedjan.
-Ett dataset måste vara uppladdat innan det går att ställa en fråga.
+Tar emot en fråga om datasetet och skickar den genom Runnable kedjan. Ett
+dataset måste vara uppladdat innan det går att ställa en fråga.
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/ai/ask" \
@@ -153,42 +157,26 @@ Exempel på svar:
 }
 ```
 
-Eftersom svaret genereras av en språkmodell kan innehållet variera och modellen
-kan ibland ge ett felaktigt svar.
+## Testa med Postman
 
-## Testa endpoints med Postman
+Jag använder främst Postman för att testa applikationens endpoints. Servern
+behöver vara startad innan requests kan skickas.
 
-Jag använder Postman för att testa applikationens endpoints. Servern behöver
-vara startad innan requests kan skickas:
+För att ladda upp en CSV fil skapar jag en `POST` request till
+`http://127.0.0.1:8000/data/upload`. Under Body väljer jag `form-data`, skriver
+`file` som key och ändrar typen från Text till File. Sedan väljer jag filen som
+ska laddas upp.
 
-```bash
-uv run uvicorn app.main:app --reload
-```
+Efter uppladdningen går det att skicka en `GET` request till `/data/stats`.
 
-Adressen som används i Postman är:
-
-```text
-http://127.0.0.1:8000
-```
-
-För att ladda upp ett dataset skapar jag en `POST` request till
-`/data/upload`. Under Body väljer jag `form-data`, skriver `file` som key och
-ändrar typen från Text till File. Sedan väljer jag den CSV fil som ska laddas
-upp.
-
-Efter uppladdningen går det att skicka en `GET` request till `/data/stats` för
-att se statistik om datasetet.
-
-För att ställa en fråga skapar jag en `POST` request till `/ai/ask`. Under
-Body väljer jag raw och JSON och skickar exempelvis:
+För att ställa en fråga skapar jag en `POST` request till `/ai/ask`. Under Body
+väljer jag raw och JSON och skickar exempelvis:
 
 ```json
 {
   "question": "Vilken badplats har varmast vatten?"
 }
 ```
-
-Jag använder även `GET /health` för att kontrollera att servern är igång.
 
 ## Tester
 
@@ -198,33 +186,22 @@ Testerna körs med:
 uv run pytest app/tests/ -v
 ```
 
-Tester finns för endpoints, prompt builder, response parser, Runnable kedjan
-och fel från modellen. Modellen är mockad i testerna för att de ska gå snabbt
-och inte behöva ladda SmolLM2 varje gång.
+Det finns tester för API endpoints, PromptBuilder, ResponseParser och hela
+Runnable kedjan. Modellen mockas i testerna eftersom det gör testerna snabbare
+och mer stabila. Det finns även tester för saknat dataset och fel när modellen
+inte går att ladda.
 
-## Projektstruktur
+## Begränsningar och förbättringar
 
-```text
-app/
-├── chain/
-│   ├── pipeline.py
-│   ├── runnable.py
-│   └── steps.py
-├── tests/
-│   ├── test_chain.py
-│   └── test_endpoints.py
-├── config.py
-├── data.py
-├── main.py
-└── schemas.py
-```
-
-En begränsning i projektet är att bara ett dataset sparas i minnet åt gången.
-Detta fungerar för uppgiften men hade behövt byggas om med exempelvis en
-databas eller separat fillagring om applikationen skulle användas av flera
-användare.
+En begränsning är att bara ett dataset sparas i minnet åt gången. Detta
+fungerar bra för projektets storlek men hade behövt byggas om med exempelvis en
+databas om flera användare skulle använda applikationen samtidigt.
 
 Modellen får bara statistik från Pandas `describe()` och inte hela datasetet.
-Därför fungerar den bäst för enklare frågor om till exempel medelvärde, min och
-max. Eftersom SmolLM2 är en liten lokal modell kan svaren också bli enklare
-eller ibland felaktiga jämfört med större AI modeller.
+Det betyder att den fungerar bäst för enklare frågor om till exempel
+medelvärde, min och max. SmolLM2 är även en ganska liten modell och kan ibland
+ge enklare eller felaktiga svar jämfört med större AI modeller.
+
+Hade jag byggt vidare på projektet hade jag velat förbättra analysen av
+datasetet, lägga till mer loggning och göra det möjligt att hantera flera
+dataset samtidigt.
