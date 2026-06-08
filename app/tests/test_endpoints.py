@@ -37,6 +37,26 @@ def test_upload_csv_returns_metadata() -> None:
     assert response.json()["dtypes"]["water_temp_c"] == "float64"
 
 
+def test_upload_rejects_wrong_file_extension() -> None:
+    response = client.post(
+        "/data/upload",
+        files={"file": ("water.txt", b"place,temp\nBryggan,21\n", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Only CSV files are allowed"
+
+
+def test_upload_rejects_empty_csv() -> None:
+    response = client.post(
+        "/data/upload",
+        files={"file": ("water.csv", b"", "text/csv")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "CSV file is empty"
+
+
 def test_stats_without_dataset_returns_404() -> None:
     response = client.get("/data/stats")
 
@@ -68,6 +88,15 @@ def test_ask_without_dataset_returns_400() -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_ask_rejects_empty_question() -> None:
+    response = client.post(
+        "/ai/ask",
+        json={"question": ""},
+    )
+
+    assert response.status_code == 422
 
 
 def test_ask_returns_answer_from_chain(monkeypatch) -> None:

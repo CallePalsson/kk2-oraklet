@@ -11,7 +11,7 @@ class Settings:
         "MODEL_NAME",
         "HuggingFaceTB/SmolLM2-135M-Instruct",
     )
-    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", "1000000"))
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", "100000000"))
 
 
 settings = Settings()

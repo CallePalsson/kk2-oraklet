@@ -95,6 +95,14 @@ den passar bäst för enklare frågor om till exempel medelvärde, min och max.
 Om användaren frågar om mer avancerade samband mellan flera kolumner kan svaret
 bli osäkert.
 
+Ett problem jag märkte under testningen var att modellen ibland kunde ge svar
+som lät trovärdiga trots att statistiken egentligen inte innehöll tillräckligt
+med information för att dra sådana slutsatser. Eftersom modellen bara får data
+från Pandas describe() kan den till exempel försöka beskriva trender eller
+samband som inte faktiskt finns i underlaget. Detta visar en viktig begränsning
+med språkmodeller: de kan generera rimligt formulerade svar även när datan inte
+räcker för att ge ett säkert svar.
+
 Ett exempel på bias hade kunnat uppstå om datasetet innehåller skolresultat,
 hälsodata eller ekonomisk information där vissa grupper är överrepresenterade.
 Modellen kan då ge ett svar som låter generellt, men som egentligen bara bygger
